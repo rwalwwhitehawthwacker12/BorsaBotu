@@ -71,6 +71,84 @@ class YahooBypassEngine:
         except Exception:
             return pd.DataFrame()
 
+
+def portfoy_simulasyonu(guncel_fiyat, z_skoru, rsi, gunluk_oynaklik, m_egim):
+    """
+    Kullanıcının girdiği vade ve sermayeye göre risk/getiri simülasyonu yapan yeni motor.
+    """
+    print(f"\n{C_YELLOW}╔════════════════════════════════════════════════════════════════════════╗{C_RESET}")
+    print(f"{C_YELLOW}║               💰 PORTFÖY RİSK & GELECEK TAHMİN SİMÜLATÖRÜ              ║{C_RESET}")
+    print(f"{C_YELLOW}╚════════════════════════════════════════════════════════════════════════╝{C_RESET}")
+    
+    try:
+        bakiye = float(input(f" {C_WHITE}👉 Bu varlığa yatıracağınız toplam bütçe (TL): {C_RESET}"))
+        vade = int(input(f" {C_WHITE}👉 Elinizde tutacağınız yaklaşık süre (Gün): {C_RESET}"))
+        if bakiye <= 0 or vade <= 0:
+            print(f"{C_RED}[-] HATA: Geçersiz bütçe veya vade süresi!{C_RESET}")
+            return
+    except ValueError:
+        print(f"{C_RED}[-] HATA: Lütfen sadece sayısal değerler girin!{C_RESET}")
+        return
+
+    print(f"\n{C_CYAN}[+] Kuantum olasılık matrisleri ve trend eğimleri hesaplanıyor...{C_RESET}")
+    time.sleep(1)
+
+    # Matematiksel Simülasyon Ağırlıkları
+    # m_egim logaritmiktir, günlük ortalama logaritmik büyümeyi temsil eder.
+    trend_etkisi = m_egim * vade * 100  # Vadeye yayılmış makro yön
+    
+    # RSI ve Z-Skoru uç noktalarındaysa düzeltme (mean-reversion) çarpanı ekleyelim
+    duzeltme_etkisi = 0.0
+    if z_skoru > 1.0: duzeltme_etkisi -= (z_skoru * 1.5)  # Aşırı pahalıysa aşağı baskı
+    if z_skoru < -1.0: duzeltme_etkisi += (abs(z_skoru) * 2.0) # Aşırı ucuzsa yukarı destek
+    if rsi > 75: duzeltme_etkisi -= 2.0
+    if rsi < 25: duzeltme_etkisi += 2.5
+
+    # Beklenen baz getiri yüzdesi (Makro + Mikro birleşik eğilim)
+    beklenen_baz_degisim = trend_etkisi + duzeltme_etkisi
+    
+    # Vade uzadıkça oynaklığın (risk marjının) karekök zaman yasasına göre genişlemesi
+    toplam_oynaklik_marji = gunluk_oynaklik * np.sqrt(vade) * 1.5
+
+    # İyimser ve Kötümser senaryoların matematiksel tavan/taban sınırları
+    tahmini_kar_orani = beklenen_baz_degisim + toplam_oynaklik_marji
+    tahmini_zarar_orani = beklenen_baz_degisim - toplam_oynaklik_marji
+
+    # Negatif kâr saçmalığını veya aşırı abartı durumları törpüleme (Siber Sigorta)
+    if tahmini_zarar_orani < -90: tahmini_zarar_orani = -90.0
+
+    iyimser_bakiye = bakiye * (1 + (tahmini_kar_orani / 100))
+    kotumser_bakiye = bakiye * (1 + (tahmini_zarar_orani / 100))
+    
+    # Ekran Çıktısı Paneli
+    print(f"\n{C_MAGENTA}┌────────────────────────────────────────────────────────────────────────┐{C_RESET}")
+    print(f"│ {C_BOLD}{C_WHITE}📊 {vade} GÜNLÜK MATEMATİKSEL PROJEKSİYON SONUÇLARI{C_RESET}                          │")
+    print(f"{C_MAGENTA}├────────────────────────────────────────────────────────────────────────┤{C_RESET}")
+    print(f"  {C_WHITE}İlk Yatırılan Ana Para : {C_BOLD}{bakiye:,.2f} TL{C_RESET}")
+    print(f"  {C_WHITE}Pazar Trend Eğilimi    : {C_CYAN}%{beklenen_baz_degisim:+.2f}{C_RESET}")
+    print(f"{C_MAGENTA}├────────────────────────────────────────────────────────────────────────┤{C_RESET}")
+    
+    # İyimser Senaryo
+    print(f"  {C_GREEN}{C_BOLD}🚀 İYİMSER SENARYO (Boğa Piyasası):{C_RESET}")
+    print(f"    Olası Maksimum Kâr     : {C_GREEN}{C_BOLD}%{tahmini_kar_orani:+.2f}{C_RESET}")
+    print(f"    Vade Sonu Tahmini Para : {C_GREEN}{C_BOLD}{iyimser_bakiye:,.2f} TL{C_RESET}")
+    
+    # Kötümser Senaryo
+    print(f"  {C_RED}{C_BOLD}💥 KÖTÜMSER SENARYO (Ayı Piyasası):{C_RESET}")
+    print(f"    Olası Maksimum Zarar   : {C_RED}{C_BOLD}%{tahmini_zarar_orani:+.2f}{C_RESET}")
+    print(f"    Vade Sonu Tahmini Para : {C_RED}{C_BOLD}{kotumser_bakiye:,.2f} TL{C_RESET}")
+    
+    print(f"{C_MAGENTA}└────────────────────────────────────────────────────────────────────────┘{C_RESET}")
+    
+    # Siber Uyarı Notu
+    print(f"{C_RED}{C_BOLD}⚠️  SİBER QUANT NOTU & YASAL UYARI:{C_RESET}")
+    print(f" {C_YELLOW}Bu simülasyon; geçmiş 10 yıllık veri sapmaları (Z-skor), RSI momentumu ve")
+    print(f" oynaklık (volatilite) algoritmaları kullanılarak olasılıksal hesaplanmıştır.")
+    print(f" Finansal piyasalarda %100 kesinlik YOKTUR. Savaşlar, manipülasyonlar ve ani")
+    print(f" makroekonomik krizler teknik hesaplamaları bozabilir. Asla tek başına yatırım")
+    print(f" tavsiyesi olarak değerlendirilmemelidir! Pozisyon alırken riskinizi bölün.{C_RESET}\n")
+
+
 def matematiksel_analiz(secilen_sembol, isim, engine):
     print(f"\n{C_CYAN}[+] {isim} ({secilen_sembol}) siber tünel üzerinden indiriliyor...{C_RESET}")
     
@@ -131,7 +209,7 @@ def matematiksel_analiz(secilen_sembol, isim, engine):
         uzun_vade_detay = "Varlık, küresel döviz sepetine oranla son 10 yılın en dip ve yıpranmış seviyesinde. Makro trend istatistiksel olarak tamamen alıcı lehine dönmüş durumda. Orta-uzun vadeli portföyler için matematiksel açıdan riskin minimum, kâr potansiyelinin maksimum olduğu altın fırsat dönemidir."
     elif -1.0 <= z_skoru < -0.3:
         uzun_vade_kod = "AL"
-        uzun_vade_sinyal = f"{C_GREEN}🟢 KADEMELİ ALIM ALANI{C_RESET}"
+        uzun_vade_sinyal = f"{C_GREEN}🟢 KADEMELİ ALUM ALANI{C_RESET}"
         uzun_vade_detay = "Fiyat, 10 yıllık küresel büyüme kanalının ve tarihsel ortalamaların altında seyrediyor. Mevcut seviyeler uzun vadeli biriktirme stratejisi (dolar maliyet ortalaması) için gayet ucuz ve makul. Parçalı alımlarla maliyet düşürerek pozisyon büyütülebilir."
     elif -0.3 <= z_skoru <= 0.3:
         uzun_vade_kod = "NOTR"
@@ -179,18 +257,18 @@ def matematiksel_analiz(secilen_sembol, isim, engine):
         kisa_vade_detay = "2 haftalık grafik yatay ve kararsız bir konsolidasyon bandında. Net bir momentum veya kırılım yok, yönü görmek için izlemek daha güvenli."
     elif 65 < guncel_rsi <= 75:
         kisa_vade_kod = "SAT"
-        kisa_vade_sinyal = f"{C_YELLOW}🟠 KISA VADE: DİRENÇTEN KÂR ALIM{C_RESET}"
+        kisa_vade_sinyal = f"{C_YELLOW}🟠 KISA VADE: DİRENÇTEN KÂR ALUM{C_RESET}"
         kisa_vade_detay = "Fiyat 14 günlük kanalın en üst direnç sınırına çarptı. RSI şişmeye başlıyor, buralardan kâr satışı yiyerek yerel bir geri çekilme yaşayabilir."
     else:
         kisa_vade_kod = "SAT"
-        kisa_vade_sinyal = f"{C_RED}{C_BOLD}🔴 KISA VADE: AŞIRI ALIM (YÜKSEK RİSK){C_RESET}"
+        kisa_vade_sinyal = f"{C_RED}{C_BOLD}🔴 KISA VADE: AŞIRI ALUM (YÜKSEK RİSK){C_RESET}"
         kisa_vade_detay = "Kısa vadede çok çılgın bir momentum yakalamış, RSI 75 üzerine fırlamış durumda. Fiyat nefes tazelemek için her an sert bir düzeltme dalgası başlatabilir, korumasız girmek tehlikeli."
 
     # Sentez Döngüleri
     if uzun_vade_kod == "AL" and kisa_vade_kod == "AL":
-        kombinasyon = f"{C_GREEN}{C_BOLD}🌟 KUSURSUZ ALIM DÖNGÜSÜ: Hem 10 yıllık makro kanalda tarihsel olarak ucuz/bedava seviyede, hem de 2 haftalık mikro grafikte dipten kalkıyor! Kaçırılmayacak pazar fırsatı.{C_RESET}"
+        kombinasyon = f"{C_GREEN}{C_BOLD}🌟 KUSURSUZ ALUM DÖNGÜSÜ: Hem 10 yıllık makro kanalda tarihsel olarak ucuz/bedava seviyede, hem de 2 haftalık mikro grafikte dipten kalkıyor! Kaçırılmayacak pazar fırsatı.{C_RESET}"
     elif uzun_vade_kod == "SAT" and kisa_vade_kod == "SAT":
-        kombinasyon = f"{C_RED}{C_BOLD}🚨 KUSURSUZ SATIM DÖNGÜSÜ: Hem uzun vadeli grafikte küresel balon bölgesinde hem de kısa vadede aşırı şişmiş! Derhal kar realizasyonu veya nakde geçiş düşünülmeli.{C_RESET}"
+        kombinasyon = f"{C_RED}{C_BOLD}🚨 KUSURSUZ SATUM DÖNGÜSÜ: Hem uzun vadeli grafikte küresel balon bölgesinde hem de kısa vadede aşırı şişmiş! Derhal kar realizasyonu veya nakde geçiş düşünülmeli.{C_RESET}"
     elif uzun_vade_kod == "AL" and kisa_vade_kod == "SAT":
         kombinasyon = f"{C_CYAN}🔄 ÇELİŞKİLİ STRATEJİ (MAKRO UCUZ / MİKRO PAHALI): Varlık uzun vadede hala ucuz ve büyük potansiyel barındırıyor ancak son 2 haftada çok sert yükselmiş. Alım yapmak için kısa vadeli bu şişkinliğin (RSI) sönmesini ve yerel bir düzeltme yapmasını beklemek en akıllıca hamledir.{C_RESET}"
     elif uzun_vade_kod == "SAT" and kisa_vade_kod == "AL":
@@ -198,7 +276,7 @@ def matematiksel_analiz(secilen_sembol, isim, engine):
     else:
         kombinasyon = f"{C_WHITE}⚪ DENGELİ PAZAR: Varlık şu an makro ve mikro dengede salınıyor. Büyük bir trend başlangıcı yok, yatay bant trade stratejisi uygulanabilir.{C_RESET}"
 
-    # EKRAN ÇIKTISI (Hata veren satır temizlendi)
+    # EKRAN ÇIKTISI
     print(f"\n{C_MAGENTA}{'='*60}{C_RESET}")
     print(f"   {C_BOLD}{C_WHITE}{isim.upper()} DERİN DÖNGÜ ANALİZ RAPORU{C_RESET}")
     print(f"{C_MAGENTA}{'='*60}{C_RESET}")
@@ -225,6 +303,12 @@ def matematiksel_analiz(secilen_sembol, isim, engine):
     print(f"{C_MAGENTA}{'='*60}{C_RESET}")
     print(f"🎯 {kombinasyon}")
     print(f"{C_MAGENTA}{'='*60}{C_RESET}\n")
+
+    # Yeni Modülün Tetiklenmesi Sorusunu Soruyoruz
+    sim_onay = input(f"{C_YELLOW}{C_BOLD}[?] Bu varlık için Kişisel Yatırım ve Risk Simülasyonu yapmak ister misiniz? (E/H): {C_RESET}").strip().upper()
+    if sim_onay == "E":
+        portfoy_simulasyonu(guncel_tl, z_skoru, guncel_rsi, ortalama_oynaklik, m)
+
 
 def menu():
     engine = YahooBypassEngine()
@@ -254,7 +338,7 @@ def menu():
         print(f"    [+] CODENAME: {C_RED}realwhitehathacker12{C_GREEN} | SYSTEM ACTIVE    {C_RESET}")
         
         print(f"{C_MAGENTA}╔════════════════════════════════════════════════════════════════════════╗{C_RESET}")
-        print(f"{C_MAGENTA}║                      {C_WHITE}{C_BOLD}MATRIX QUANT BORSA BOTU v4.6{C_RESET}{C_MAGENTA}                      ║{C_RESET}")
+        print(f"{C_MAGENTA}║                       {C_WHITE}{C_BOLD}MATRIX QUANT BORSA BOTU v5.0{C_RESET}{C_MAGENTA}                      ║{C_RESET}")
         print(f"{C_MAGENTA}╚════════════════════════════════════════════════════════════════════════╝{C_RESET}")
         
         print(f" {C_BLUE}[ KATEGORİLER VE ENTEGRE EDİLMİŞ ONLARCA HAZIR VARLIK ]{C_RESET}")
@@ -268,7 +352,7 @@ def menu():
         print(f" {C_CYAN}🇺🇸 ABD Teknoloji  : {C_WHITE}AAPL (Apple), TSLA (Tesla), NVDA, MSFT, AMZN{C_RESET}")
         print(f"{C_MAGENTA}──────────────────────────────────────────────────────────────────────────{C_RESET}")
         print(f" {C_YELLOW}💡 İPUCU:{C_RESET} Yukarıdaki listeden bir kelime yazabilir ya da listede olmayan")
-        print(f"          farklı bir BIST hissesini direkt yazabilirsiniz (Örn: `SRENG`).")
+        print(f"          farklı bir BIST hissesini direkt yazabilirsiniz (Örn: `EREGL`).")
         print(f" {C_RED}❌ ÇIKIŞ YAPMAK İÇİN:{C_RESET} {C_BOLD}'CIKIS'{C_RESET} yazıp Enter'a basın.")
         print(f"{C_MAGENTA}──────────────────────────────────────────────────────────────────────────{C_RESET}")
         
@@ -288,7 +372,7 @@ def menu():
                 yahoo_kod, meta_isim = girdi, f"Özel Varlık ({girdi})"
                 
         matematiksel_analiz(yahoo_kod, meta_isim, engine)
-        input(f"{C_CYAN}🔄 Yeniden Matrix Paneline dönmek için [Enter]'a basın...{C_RESET}")
+        input(f"\n{C_CYAN}🔄 Yeniden Matrix Paneline dönmek için [Enter]'a basın...{C_RESET}")
 
 if __name__ == "__main__":
     menu()
